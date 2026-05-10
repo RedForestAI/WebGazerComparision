@@ -230,6 +230,10 @@ async function startWebGazer() {
   btnStart.disabled = true
 
   try {
+    // Set absolute path to MediaPipe assets so it works on GitHub Pages
+    const base = import.meta.env.BASE_URL || '/'
+    webgazer.params.faceMeshSolutionPath = base + 'mediapipe/face_mesh'
+
     await webgazer
       .setGazeListener(onGaze)
       .setRegression('ridge')

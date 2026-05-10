@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebGazer FPS Benchmark</title>
+  <link rel="icon" href="data:,">
+  <!-- WebGazer loaded via npm package (bundled by Vite) -->
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #0d0d0d;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+      gap: 20px;
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      font-weight: normal;
+      color: #aaa;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    #controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      padding: 8px 20px;
+      border: 1px solid #444;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      font-family: inherit;
+      font-size: 0.85rem;
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    button:hover { background: #252525; border-color: #666; }
+    button:disabled { opacity: 0.35; cursor: not-allowed; }
+    button.primary { border-color: #4a9eff; color: #4a9eff; }
+    button.primary:hover { background: #1a2a3a; }
+    button.danger { border-color: #ff5555; color: #ff5555; }
+    button.danger:hover { background: #2a1a1a; }
+
+    #status-bar {
+      font-size: 0.8rem;
+      color: #888;
+      min-height: 1.2em;
+    }
+    #status-bar.running { color: #4caf50; }
+    #status-bar.error { color: #ff5555; }
+
+    /* Stats grid */
+    #stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      width: 100%;
+      max-width: 800px;
+    }
+
+    .stat-card {
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .stat-label {
+      font-size: 0.7rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .stat-value {
+      font-size: 1.8rem;
+      font-weight: bold;
+      color: #e0e0e0;
+      line-height: 1;
+    }
+    .stat-value.highlight { color: #4a9eff; }
+    .stat-unit {
+      font-size: 0.7rem;
+      color: #555;
+    }
+
+    /* FPS sparkline */
+    #sparkline-wrap {
+      width: 100%;
+      max-width: 800px;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 12px 16px;
+    }
+    .section-label {
+      font-size: 0.7rem;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 8px;
+    }
+    #sparkline {
+      width: 100%;
+      height: 80px;
+      display: block;
+    }
+
+    /* Log table */
+    #log-wrap {
+      width: 100%;
+      max-width: 800px;
+      background: #141414;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 12px 16px;
+    }
+    #log-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    #log-table-wrap {
+      overflow-y: auto;
+      max-height: 200px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.78rem;
+    }
+    thead th {
+      color: #555;
+      text-align: left;
+      padding: 4px 8px;
+      border-bottom: 1px solid #222;
+      font-weight: normal;
+      text-transform: uppercase;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      position: sticky;
+      top: 0;
+      background: #141414;
+    }
+    tbody td {
+      padding: 3px 8px;
+      color: #bbb;
+      border-bottom: 1px solid #1a1a1a;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+
+    #gaze-dot {
+      position: fixed;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: rgba(74, 158, 255, 0.7);
+      border: 2px solid rgba(74, 158, 255, 0.9);
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      display: none;
+      z-index: 9999;
+    }
+
+    #note {
+      font-size: 0.72rem;
+      color: #555;
+      max-width: 800px;
+      text-align: center;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>WebGazer FPS / Latency Benchmark</h1>
+
+  <div id="controls">
+    <button id="btn-start" class="primary">Start WebGazer</button>
+    <button id="btn-stop" class="danger" disabled>Stop</button>
+    <button id="btn-export" disabled>Export CSV</button>
+    <button id="btn-reset" disabled>Reset Stats</button>
+  </div>
+
+  <div id="status-bar">Idle — press Start to initialize camera and begin measurement.</div>
+
+  <div id="stats-grid">
+    <div class="stat-card">
+      <div class="stat-label">Current FPS</div>
+      <div class="stat-value highlight" id="stat-fps">--</div>
+      <div class="stat-unit">predictions / sec (1s window)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Mean Latency</div>
+      <div class="stat-value" id="stat-mean">--</div>
+      <div class="stat-unit">ms per prediction</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Min Latency</div>
+      <div class="stat-value" id="stat-min">--</div>
+      <div class="stat-unit">ms</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Max Latency</div>
+      <div class="stat-value" id="stat-max">--</div>
+      <div class="stat-unit">ms</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">P95 Latency</div>
+      <div class="stat-value" id="stat-p95">--</div>
+      <div class="stat-unit">ms (95th percentile)</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Predictions</div>
+      <div class="stat-value" id="stat-count">0</div>
+      <div class="stat-unit">samples collected</div>
+    </div>
+  </div>
+
+  <div id="sparkline-wrap">
+    <div class="section-label">FPS over time (1s buckets)</div>
+    <canvas id="sparkline"></canvas>
+  </div>
+
+  <div id="log-wrap">
+    <div id="log-header">
+      <div class="section-label">Prediction Log (latest 200)</div>
+      <div class="stat-unit" id="log-count">0 rows</div>
+    </div>
+    <div id="log-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Timestamp (ms)</th>
+            <th>Latency (ms)</th>
+            <th>Gaze X (px)</th>
+            <th>Gaze Y (px)</th>
+          </tr>
+        </thead>
+        <tbody id="log-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="note">
+    Latency is measured as wall-clock time between consecutive WebGazer gaze listener callbacks,
+    which corresponds to one full forward-propagation cycle (face detection + eye extraction + gaze regression).
+    Warm up for ~5 seconds before recording. Export CSV for offline analysis.
+  </div>
+
+  <div id="gaze-dot"></div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
